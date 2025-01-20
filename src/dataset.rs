@@ -21,49 +21,6 @@ pub struct Dataset {
     iter_count: usize,
 }
 
-#[cfg(test)]
-mod dataset_tests {
-
-    #[test]
-    fn test_standardization() {
-        use ndarray::Array2;
-
-        use crate::dataset::Dataset;
-        
-        let inputs = Array2::from_shape_vec((1, 3), vec![-1.0, 0.0, 1.0]).unwrap();
-        let labels = Array2::from_shape_vec((1, 3), vec![-1.0, 1.0, 3.0]).unwrap();
-        let mut dataset = Dataset::new(inputs.clone(), labels.clone(), 3);
-        dataset.standardize_inputs();
-        dataset.standardize_labels();
-
-        let (new_inputs, new_labels) = dataset.get_all();
-
-        println!("standardized inputs: {}", new_inputs);
-        println!("standardized labels: {}", new_labels);
-
-        assert_eq!(new_inputs, new_labels);     
-    }
-    #[test]
-    fn test_normalization() {
-        use ndarray::Array2;
-
-        use crate::dataset::Dataset;
-        let inputs = Array2::from_shape_vec((1, 3), vec![-1.0, 0.0, 1.0]).unwrap();
-        let labels = Array2::from_shape_vec((1, 3), vec![-1.0, 1.0, 3.0]).unwrap();
-        let mut dataset = Dataset::new(inputs.clone(), labels.clone(), 3);
-        dataset.normalize_inputs();
-        dataset.normalize_labels();
-
-        let (new_inputs, new_labels) = dataset.get_all();
-
-        println!("normalized inputs: {}", new_inputs);
-        println!("normalized labels: {}", new_labels);
-        
-        assert_eq!(new_inputs, new_labels);
-    }
-}
-
-
 impl Dataset {
     pub fn new(inputs: Array2<f64>, labels: Array2<f64>, batch_size: usize) -> Dataset {
         Dataset {
@@ -136,4 +93,43 @@ impl Iterator for Dataset {
         self.iter_count += batch_size;
         Some((inputs, outputs))
     }
+}
+
+
+
+#[test]
+fn test_standardization() {
+    use ndarray::Array2;
+            
+    let inputs = Array2::from_shape_vec((1, 3), vec![-1.0, 0.0, 1.0]).unwrap();
+    let labels = Array2::from_shape_vec((1, 3), vec![-1.0, 1.0, 3.0]).unwrap();
+    let mut dataset = Dataset::new(inputs.clone(), labels.clone(), 3);
+    dataset.standardize_inputs();
+    dataset.standardize_labels();
+
+    let (new_inputs, new_labels) = dataset.get_all();
+
+    println!("standardized inputs: {}", new_inputs);
+    println!("standardized labels: {}", new_labels);
+
+    assert_eq!(new_inputs, new_labels);     
+}
+
+#[test]
+fn test_normalization() {
+    use ndarray::Array2;
+
+    use crate::dataset::Dataset;
+    let inputs = Array2::from_shape_vec((1, 3), vec![-1.0, 0.0, 1.0]).unwrap();
+    let labels = Array2::from_shape_vec((1, 3), vec![-1.0, 1.0, 3.0]).unwrap();
+    let mut dataset = Dataset::new(inputs.clone(), labels.clone(), 3);
+    dataset.normalize_inputs();
+    dataset.normalize_labels();
+
+    let (new_inputs, new_labels) = dataset.get_all();
+
+    println!("normalized inputs: {}", new_inputs);
+    println!("normalized labels: {}", new_labels);
+    
+    assert_eq!(new_inputs, new_labels);
 }

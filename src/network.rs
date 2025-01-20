@@ -201,3 +201,37 @@ impl Layer {
         output.map(|&x| self.activation_function.activate(x))
     }
 }
+
+#[test]
+fn test_forward_pass() {
+    use rand::{rngs::StdRng, SeedableRng, Rng};
+    use ndarray::{Array1, Array2};
+
+    let dataset_size = 10;
+
+    let inputs = Array2::from_shape_vec((1, dataset_size), (1..=dataset_size).map(|x| x as f64).collect()).unwrap();
+
+    let mut network = Network::new(123,
+        LossFunction::MeanSquaredError, 
+        vec![
+        Layer::new(1, 2, ActivationFunction::Tanh),
+        Layer::new(2, 1, ActivationFunction::None)
+    ]);
+    
+    network.run(&inputs);
+    println!("outputs: {:?}", network.run(&inputs));
+
+    let mut rng = StdRng::seed_from_u64(123);
+    let range: f64 = (6.0 / 3 as f64).sqrt();
+    let initial_weights = Array1::from_shape_vec(4, (0..4).map(|_| rng.gen_range(-range..range)).collect::<Vec<f64>>()).unwrap();
+    let initial_biases = Array1::from_shape_vec(3, vec![1.0, 1.0, 1.0]).unwrap();
+    
+    //perform gradient descent manually for one step for model specifed above:
+    let h1 = |x : f64| (initial_weights[0] * x + initial_biases[0]).tanh();
+    let h2 = |x : f64| (initial_weights[1] * x + initial_biases[1]).tanh();
+    let o = |x : f64| initial_weights[2] * h1(x) + initial_weights[3] * h2(x) + initial_biases[2];
+
+    let manual_outputs = Array2::from_shape_vec((1, dataset_size), inputs.iter().map(|&x| o(x)).collect()).unwrap();
+    println!("manual outputs: {:?}", manual_outputs);
+    assert!(manual_outputs.iter().zip(network.run(&inputs).iter()).all(|(a, b)| (a - b).abs() < 1e-15));
+}
