@@ -1,0 +1,10 @@
+[package]
+name = "smlr"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = "0.8.5"
+ndarray = "0.15.6"
+plotlib = "0.5.1"
+mnist = "0.6.0"
