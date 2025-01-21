@@ -1,6 +1,4 @@
 pub mod network;
-mod utils;
-mod data_importing;
 pub mod dataset;
 
 //TODO:
@@ -8,9 +6,7 @@ pub mod dataset;
         // - (GPU support)
 
     // New features: 
-        // - Support new loss functions (custom)
-        // - Support Datasets x
-        // - Support different types of normalizations
+        // - Support custom loss functions
         // - Support custom activation functions
         // - Support stochastic gradient descent
         // - (Convolution)
@@ -136,7 +132,7 @@ mod fit_tests {
         ]);
 
         let f = |x : &f64| x * x;
-
+        
         let inputs = Array2::from_shape_vec((1, DATASET_SIZE), (0..DATASET_SIZE).map(|x| (x as f64) * STEP_SIZE).collect::<Vec<f64>>()).unwrap();
         
         let outputs = network.run(&inputs);
@@ -145,7 +141,7 @@ mod fit_tests {
         let labels = Array2::from_shape_vec((1, DATASET_SIZE), labels).unwrap();
         
         println!("before training");
-        println!("mean squared error is: {}", utils::mse(&labels, &outputs));
+        println!("mean squared error is: {}", LossFunction::MeanSquaredError.calculate_loss(labels.clone(), outputs.clone()));
         
         let true_data = (0..DATASET_SIZE).map(|x| x as f64).map(|x| (x, f(&x))).collect();
         let predictions = inputs.iter().zip(outputs.iter()).map(|(&input, &output)| (input, output)).collect();
@@ -176,7 +172,7 @@ mod fit_tests {
         let outputs = network.run(&inputs);
         
         println!("after training");
-        println!("mean squared error is: {}", utils::mse(&labels, &outputs));
+        println!("mean squared error is: {}", LossFunction::MeanSquaredError.calculate_loss(labels.clone(), outputs.clone()));
 
         let true_data = (0..DATASET_SIZE).map(|x| (x as f64) * STEP_SIZE).map(|x| (x, f(&x))).collect();
         let predictions = inputs.iter().zip(outputs.iter()).map(|(&input, &output)| (input, output)).collect();
@@ -193,6 +189,6 @@ mod fit_tests {
         );
         let view = ContinuousView::new().add(s1).add(s2);
         Page::single(&view).save("after_training.svg").expect("saving svg");
-        assert!(utils::mse(&labels, &outputs) < 1e-4);
+        assert!(LossFunction::MeanSquaredError.calculate_loss(labels.clone(), outputs.clone()) < 1e-4);
     }
 }

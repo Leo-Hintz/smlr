@@ -6,7 +6,6 @@ use core::f64;
 use ndarray::{Array1, Array2, Axis};
 use crate::dataset::Dataset;
 use rand::{Rng, rngs::StdRng, SeedableRng};
-use crate::utils::{self};
 
 #[derive(Clone)]
 pub enum ActivationFunction {
@@ -20,8 +19,8 @@ pub enum ActivationFunction {
 impl ActivationFunction {
     fn activate(&self, x: f64) -> f64 {
         match self {
-            ActivationFunction::Sigmoid => utils::sigmoid(x),
-            ActivationFunction::ReLU => utils::re_lu(x),
+            ActivationFunction::Sigmoid =>  1.0 / (1.0 + (-x).exp()),
+            ActivationFunction::ReLU => if x > 0.0 { x } else { 0.0 },
             ActivationFunction::Tanh => x.tanh(),
             ActivationFunction::LeakyReLU => if x > 0.0 { x } else { 0.01 * x },
             ActivationFunction::None => x,
@@ -45,19 +44,76 @@ pub enum LossFunction {
 }
 
 impl LossFunction {
-    fn calculate_loss(&self, labels: Array2<f64>, outputs: Array2<f64>) -> f64 {
+    pub fn calculate_loss(&self, labels: Array2<f64>, outputs: Array2<f64>) -> f64 {
         match self {
-            LossFunction::MeanSquaredError => utils::mse(&labels, &outputs),
-            LossFunction::CrossEntropy => 0.0,
+            LossFunction::MeanSquaredError => {
+                let diff = outputs - labels;
+                let squared_diff = diff.mapv(|x| x.powi(2));
+                let mse = squared_diff.sum() / squared_diff.len() as f64;
+                mse
+            }
+
+            LossFunction::CrossEntropy => {
+                //Guide for stable cross entropy: https://jaykmody.com/blog/stable-softmax/
+                let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
+                let divisors = outputs.map_axis(Axis(0), |x| x.mapv(|x| (x - c).exp()).sum());
+                let log_softmax = outputs - c - divisors.mapv(|x| x.ln());
+                let loss = (&labels * log_softmax).sum();
+                -loss / labels.dim().0 as f64
+            }
         }
     }
     
     fn derivative(&self, labels: &Array2<f64>, outputs: &Array2<f64>) -> Array2<f64> {
         match self {
             LossFunction::MeanSquaredError => outputs - labels,
-            LossFunction::CrossEntropy => Array2::zeros((0, 0)),
+            LossFunction::CrossEntropy => {
+                //Guide for stable cross entropy: https://jaykmody.com/blog/stable-softmax/
+                let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
+                let divisors = outputs.map_axis(Axis(0), |x| x.mapv(|x| (x - c).exp()).sum());
+                let probabilities = (outputs - c).mapv(|x| x.exp()) / divisors;
+                probabilities - labels
+            }
         }
     }
+}
+
+#[test]
+fn test_cross_entropy_small_values() {
+    let labels = Array2::from_shape_vec((3, 1), vec![1.0, 0.6, 0.0]).unwrap();
+    let outputs = Array2::from_shape_vec((3, 1), vec![0.0, 1.6, 3.0]).unwrap();
+    
+    let divisor = outputs.mapv(|x: f64| x.exp()).sum();
+    
+    let true_loss = -((labels[[0, 0]] * 
+        (outputs[[0, 0]].exp() / divisor).ln() + labels[[1, 0]] * 
+        (outputs[[1, 0]].exp() / divisor).ln() + labels[[2, 0]] * 
+        (outputs[[2, 0]].exp() / divisor).ln()) / 3.0);
+    
+    let loss = LossFunction::CrossEntropy.calculate_loss(labels, outputs);
+    println!("true loss: {}", true_loss);
+    println!("loss: {}", loss);
+    assert!((true_loss - loss).abs() < 1e-15);
+}
+
+#[test]
+fn test_cross_entropy_large_values() {
+    let labels = Array2::from_shape_vec((3, 1), vec![190.0, 512.03, 231.4]).unwrap();
+    let outputs = Array2::from_shape_vec((3, 1), vec![800.0, 132.6, 3.0]).unwrap();
+
+    let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
+
+    let divisor = outputs.mapv(|x: f64| (x - c).exp()).sum();
+    
+    let true_loss = -(
+        labels[[0, 0]] * ((outputs[[0, 0]] - c) - divisor.ln()) + 
+        labels[[1, 0]] * ((outputs[[1, 0]] - c) - divisor.ln()) + 
+        labels[[2, 0]] * ((outputs[[2, 0]] - c) - divisor.ln())) / 3.0;
+    
+    let loss = LossFunction::CrossEntropy.calculate_loss(labels, outputs);
+    println!("true loss: {}", true_loss);
+    println!("loss: {}", loss);
+    assert!((true_loss - loss).abs() < 1e-15);
 }
 
 pub struct Network {
@@ -201,6 +257,7 @@ impl Layer {
         output.map(|&x| self.activation_function.activate(x))
     }
 }
+
 
 #[test]
 fn test_forward_pass() {
