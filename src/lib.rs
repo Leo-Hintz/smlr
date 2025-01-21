@@ -113,7 +113,7 @@ mod fit_tests {
         use network::{Network, Layer, ActivationFunction, LossFunction};
 
         const DATASET_SIZE: usize = 100;
-        const STEP_SIZE: f64 = 0.01;
+        const STEP_SIZE: f64 = 0.1;
         
         let learning_rate: f64 = 0.1;
         let decay_rate: f64 = 0.001;
@@ -131,7 +131,7 @@ mod fit_tests {
             Layer::new(10, 1, ActivationFunction::None)
         ]);
 
-        let f = |x : &f64| x * x;
+        let f = |x : &f64| x.sin();
         
         let inputs = Array2::from_shape_vec((1, DATASET_SIZE), (0..DATASET_SIZE).map(|x| (x as f64) * STEP_SIZE).collect::<Vec<f64>>()).unwrap();
         
@@ -143,7 +143,7 @@ mod fit_tests {
         println!("before training");
         println!("mean squared error is: {}", LossFunction::MeanSquaredError.calculate_loss(labels.clone(), outputs.clone()));
         
-        let true_data = (0..DATASET_SIZE).map(|x| x as f64).map(|x| (x, f(&x))).collect();
+        let true_data = (0..DATASET_SIZE).map(|x| (x as f64) * STEP_SIZE).map(|x| (x, f(&x))).collect();
         let predictions = inputs.iter().zip(outputs.iter()).map(|(&input, &output)| (input, output)).collect();
         
         let s1: Plot = Plot::new(true_data).line_style(
