@@ -36,32 +36,24 @@ impl Dataset {
     }
 
     pub fn normalize_inputs(&mut self) -> (Array1<f64>, Array1<f64>) {
-        let maxs = self.inputs.map_axis(Axis(1), |x| x.into_iter().fold(f64::NEG_INFINITY, |a, x| x.max(a)));
-        let mins = self.inputs.map_axis(Axis(1), |x| x.into_iter().fold(f64::INFINITY, |a, x| x.min(a)));
-
-        for (i, mut row) in self.inputs.axis_iter_mut(Axis(0)).enumerate() {
-            let max = maxs[i];
-            let min = mins[i];
-            if max != min {
-                row.map_inplace(|val| *val = (*val - min) / (max - min));
-            }
-        }
-
-        (maxs, mins)
+        Self::normalize(&mut self.inputs)
     }
 
     pub fn normalize_labels(&mut self) -> (Array1<f64>, Array1<f64>) {
-        let maxs = self.labels.map_axis(Axis(1), |x| x.into_iter().fold(f64::NEG_INFINITY, |a, x| x.max(a)));
-        let mins = self.labels.map_axis(Axis(1), |x| x.into_iter().fold(f64::INFINITY, |a, x| x.min(a)));
+        Self::normalize(&mut self.labels)
+    }
 
-        for (i, mut row) in self.labels.axis_iter_mut(Axis(0)).enumerate() {
+    fn normalize(data: &mut Array2<f64>) -> (Array1<f64>, Array1<f64>) {
+        let maxs = data.map_axis(Axis(1), |x| x.into_iter().fold(f64::NEG_INFINITY, |a, x| x.max(a)));
+        let mins = data.map_axis(Axis(1), |x| x.into_iter().fold(f64::INFINITY, |a, x| x.min(a)));
+
+        for (i, mut row) in data.axis_iter_mut(Axis(0)).enumerate() {
             let max = maxs[i];
             let min = mins[i];
             if max != min {
                 row.map_inplace(|val| *val = (*val - min) / (max - min));
             }
         }
-
         (maxs, mins)
     }
 
@@ -94,8 +86,6 @@ impl Iterator for Dataset {
         Some((inputs, outputs))
     }
 }
-
-
 
 #[test]
 fn test_standardization() {

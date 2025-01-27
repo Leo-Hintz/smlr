@@ -1,27 +1,46 @@
 pub mod network;
 pub mod dataset;
-
+mod test_utils;
 //TODO:
     // Optimzations:
+        // - inspect and if neccessary improve stability of loss functions, activation functions etc.
         // - (GPU support)
 
     // New features: 
+        // - Support stochastic gradient descent
+        // - New ways of weight initialization
+        // - Regularization techniques
+            // - Dropout
+            // - L1 & L2
         // - Support custom loss functions
         // - Support custom activation functions
-        // - Support stochastic gradient descent
         // - (Convolution)
+        // - (Hyperparameter optimization)
+        // - (Recurrent)
+        // - (Batch normalization)
+        // - (Layer normalization)
+        // - (Transformer)
+        
+
+    // Quality assurance
+        // - Write tests!!!
+        // - Write documentation
+        // - Write examples
+        // - Write benchmarks
+        // - Write tutorials
+        // - Write README
+
+
         
 
 #[cfg(test)]
 mod fit_tests {
-    use dataset::Dataset;
-
     use super::*;
     #[test]
     fn test_one_training_step() {
         use rand::{rngs::StdRng, SeedableRng, Rng};
         use ndarray::{Array1, Array2};
-        use network::{Network, Layer, ActivationFunction, LossFunction};
+        use network::{Network, Layer, activation_functions::ActivationFunction, LossFunction};
         use dataset::Dataset;
 
         let learning_rate: f64 = 1.0;
@@ -101,6 +120,7 @@ mod fit_tests {
         assert!(new_manual_weights.iter().zip(network.get_layers().iter().flat_map(|layer| layer.get_weights())).all(|(a, b)| (a - b).abs() < 1e-14));
         assert!(new_manual_biases.iter().zip(network.get_layers().iter().flat_map(|layer| layer.get_biases())).all(|(a, b)| (a - b).abs() < 1e-14));
     }
+
    #[test]
     fn fit_one_dimensional_function() {
         use ndarray::Array2;
@@ -110,14 +130,15 @@ mod fit_tests {
         use plotlib::style::{LineStyle, LineJoin};
         use plotlib::view::ContinuousView;
 
-        use network::{Network, Layer, ActivationFunction, LossFunction};
+        use network::{Network, Layer, activation_functions::ActivationFunction, LossFunction};
+        use dataset::Dataset;
 
-        const DATASET_SIZE: usize = 100;
+        const DATASET_SIZE: usize = 500;
         const STEP_SIZE: f64 = 0.1;
         
-        let learning_rate: f64 = 0.1;
+        let learning_rate: f64 = 0.01;
         let decay_rate: f64 = 0.001;
-        let batch_size = 10;
+        let batch_size = 1;
         let epochs = 5000;
         println!("epochs: {}", epochs);
         
@@ -126,9 +147,10 @@ mod fit_tests {
             123,
             LossFunction::MeanSquaredError,
             vec![
-            Layer::new(1, 10, ActivationFunction::Tanh),
-            Layer::new(10, 10, ActivationFunction::Tanh),
-            Layer::new(10, 1, ActivationFunction::None)
+            Layer::new(1, 20, ActivationFunction::ReLU),
+            Layer::new(20, 20, ActivationFunction::ReLU),
+            Layer::new(20, 20, ActivationFunction::Tanh),
+            Layer::new(20, 1, ActivationFunction::None)
         ]);
 
         let f = |x : &f64| x.sin();
@@ -141,7 +163,7 @@ mod fit_tests {
         let labels = Array2::from_shape_vec((1, DATASET_SIZE), labels).unwrap();
         
         println!("before training");
-        println!("mean squared error is: {}", LossFunction::MeanSquaredError.calculate_loss(labels.clone(), outputs.clone()));
+        println!("mean squared error is: {}", LossFunction::MeanSquaredError.calculate_loss(&labels, &outputs));
         
         let true_data = (0..DATASET_SIZE).map(|x| (x as f64) * STEP_SIZE).map(|x| (x, f(&x))).collect();
         let predictions = inputs.iter().zip(outputs.iter()).map(|(&input, &output)| (input, output)).collect();
@@ -159,23 +181,25 @@ mod fit_tests {
         let view = ContinuousView::new().add(s1).add(s2);
         Page::single(&view).save("before_training.svg").expect("saving svg");
 
-        let dataset = Dataset::new(
+        let mut dataset = Dataset::new(
             inputs.clone(), 
             labels.clone(), 
             batch_size
         );
-
+        let (maxs, mins) = dataset.normalize_inputs();
+        let (inputs, _) = dataset.get_all();
         //train network
         network.fit(dataset, epochs, learning_rate, decay_rate);
         
         //test network after training
+
         let outputs = network.run(&inputs);
         
         println!("after training");
-        println!("mean squared error is: {}", LossFunction::MeanSquaredError.calculate_loss(labels.clone(), outputs.clone()));
+        println!("mean squared error is: {}", LossFunction::MeanSquaredError.calculate_loss(&labels, &outputs));
 
         let true_data = (0..DATASET_SIZE).map(|x| (x as f64) * STEP_SIZE).map(|x| (x, f(&x))).collect();
-        let predictions = inputs.iter().zip(outputs.iter()).map(|(&input, &output)| (input, output)).collect();
+        let predictions = ((inputs * (maxs - &mins)) + mins).iter().zip(outputs.iter()).map(|(&input, &output)| (input, output)).collect();
 
         let s1: Plot = Plot::new(true_data).line_style(
             LineStyle::new()
@@ -189,6 +213,6 @@ mod fit_tests {
         );
         let view = ContinuousView::new().add(s1).add(s2);
         Page::single(&view).save("after_training.svg").expect("saving svg");
-        assert!(LossFunction::MeanSquaredError.calculate_loss(labels.clone(), outputs.clone()) < 1e-4);
+        assert!(LossFunction::MeanSquaredError.calculate_loss(&labels, &outputs) < 1e-4);
     }
 }

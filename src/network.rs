@@ -1,42 +1,15 @@
-#![allow(dead_code)]
+pub mod activation_functions;
+use activation_functions::ActivationFunction;
 
 extern crate rand;
 use core::f64;
 
 use ndarray::{Array1, Array2, Axis};
 use crate::dataset::Dataset;
-use rand::{Rng, rngs::StdRng, SeedableRng};
+use rand::{rngs, Rng, SeedableRng};
 
-#[derive(Clone)]
-pub enum ActivationFunction {
-    Sigmoid,
-    ReLU,
-    Tanh,
-    LeakyReLU,
-    None,
-}
 
-impl ActivationFunction {
-    fn activate(&self, x: f64) -> f64 {
-        match self {
-            ActivationFunction::Sigmoid =>  1.0 / (1.0 + (-x).exp()),
-            ActivationFunction::ReLU => if x > 0.0 { x } else { 0.0 },
-            ActivationFunction::Tanh => x.tanh(),
-            ActivationFunction::LeakyReLU => if x > 0.0 { x } else { 0.01 * x },
-            ActivationFunction::None => x,
-        }
-    }
 
-    fn derivative(&self, x: f64) -> f64 {
-        match self {
-            ActivationFunction::Sigmoid => x * (1.0 - x),
-            ActivationFunction::ReLU => if x > 0.0 { 1.0 } else { 0.0 },
-            ActivationFunction::Tanh => 1.0 - x.powi(2),
-            ActivationFunction::LeakyReLU => if x > 0.0 { 1.0 } else { 0.01 },
-            ActivationFunction::None => 1.0,
-        }
-    }
-}
 
 pub enum LossFunction {
     MeanSquaredError,
@@ -44,7 +17,7 @@ pub enum LossFunction {
 }
 
 impl LossFunction {
-    pub fn calculate_loss(&self, labels: Array2<f64>, outputs: Array2<f64>) -> f64 {
+    pub fn calculate_loss(&self, labels: &Array2<f64>, outputs: &Array2<f64>) -> f64 {
         match self {
             LossFunction::MeanSquaredError => {
                 let diff = outputs - labels;
@@ -58,7 +31,7 @@ impl LossFunction {
                 let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
                 let divisors = outputs.map_axis(Axis(0), |x| x.mapv(|x| (x - c).exp()).sum());
                 let log_softmax = outputs - c - divisors.mapv(|x| x.ln());
-                let loss = (&labels * log_softmax).sum();
+                let loss = (labels * log_softmax).sum();
                 -loss / labels.dim().0 as f64
             }
         }
@@ -79,41 +52,37 @@ impl LossFunction {
 }
 
 #[test]
-fn test_cross_entropy_small_values() {
-    let labels = Array2::from_shape_vec((3, 1), vec![1.0, 0.6, 0.0]).unwrap();
-    let outputs = Array2::from_shape_vec((3, 1), vec![0.0, 1.6, 3.0]).unwrap();
-    
-    let divisor = outputs.mapv(|x: f64| x.exp()).sum();
-    
-    let true_loss = -((labels[[0, 0]] * 
-        (outputs[[0, 0]].exp() / divisor).ln() + labels[[1, 0]] * 
-        (outputs[[1, 0]].exp() / divisor).ln() + labels[[2, 0]] * 
-        (outputs[[2, 0]].exp() / divisor).ln()) / 3.0);
-    
-    let loss = LossFunction::CrossEntropy.calculate_loss(labels, outputs);
-    println!("true loss: {}", true_loss);
-    println!("loss: {}", loss);
-    assert!((true_loss - loss).abs() < 1e-15);
-}
+fn test_cross_entropy() {
 
-#[test]
-fn test_cross_entropy_large_values() {
-    let labels = Array2::from_shape_vec((3, 1), vec![190.0, 512.03, 231.4]).unwrap();
-    let outputs = Array2::from_shape_vec((3, 1), vec![800.0, 132.6, 3.0]).unwrap();
+    fn test_three_classes(labels: Array2<f64>, outputs: Array2<f64>) -> () {
+        let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
+        let divisor = outputs.mapv(|x: f64| (x - c).exp()).sum();
 
-    let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
+        let true_loss = -(
+            (labels[[0, 0]] * (outputs[[0, 0]] - c - divisor.ln()) + 
+            labels[[1, 0]] * (outputs[[1, 0]] - c - divisor.ln()) + 
+            labels[[2, 0]] * (outputs[[2, 0]] - c - divisor.ln())) / 3.0);
 
-    let divisor = outputs.mapv(|x: f64| (x - c).exp()).sum();
+        
+            let loss = LossFunction::CrossEntropy.calculate_loss(&labels, &outputs);
+            println!("labels: {:?}", &labels);
+            println!("outputs: {:?}", &outputs);
+            println!("true loss: {}", true_loss);
+            println!("loss: {}", loss);
+            assert!((true_loss - loss).abs() < 1e-15);
+            assert!(loss.is_finite());
+            assert!(!loss.is_nan());
+            assert!(loss.is_sign_positive());
+    }
+
+    for i in 0..4000 {
+        let max_val = 1000000.0;
+        rngs::StdRng::seed_from_u64(i);
+        let labels = Array2::from_shape_vec((3, 1), (0..3).map(|_| rand::random::<f64>() * max_val).collect()).unwrap();
+        let outputs = Array2::from_shape_vec((3, 1), (0..3).map(|_| rand::random::<f64>() * max_val).collect() ).unwrap();
+        test_three_classes(labels, outputs);
+    }
     
-    let true_loss = -(
-        labels[[0, 0]] * ((outputs[[0, 0]] - c) - divisor.ln()) + 
-        labels[[1, 0]] * ((outputs[[1, 0]] - c) - divisor.ln()) + 
-        labels[[2, 0]] * ((outputs[[2, 0]] - c) - divisor.ln())) / 3.0;
-    
-    let loss = LossFunction::CrossEntropy.calculate_loss(labels, outputs);
-    println!("true loss: {}", true_loss);
-    println!("loss: {}", loss);
-    assert!((true_loss - loss).abs() < 1e-15);
 }
 
 pub struct Network {
@@ -131,7 +100,7 @@ impl Network {
             lossfunction,
             seed,
         };
-        let mut rng = StdRng::seed_from_u64(seed);
+        let mut rng = rngs::StdRng::seed_from_u64(seed);
         network.initialize_weights(&mut rng);
         network
     }
@@ -177,7 +146,7 @@ impl Network {
             let (inputs, labels) = dataset.get_all();
             let outputs = self.run(&inputs);
 
-            println!("Error is: {}", self.lossfunction.calculate_loss(labels, outputs));
+            println!("Error is: {}", self.lossfunction.calculate_loss(&labels, &outputs));
         }
     }
 
@@ -214,7 +183,7 @@ impl Network {
         }
     }
 
-    fn initialize_weights(&mut self, rng: &mut StdRng) {
+    fn initialize_weights(&mut self, rng: &mut rngs::StdRng) {
         for layer in self.layers.iter_mut() {
             let (rows, cols) = layer.weights.dim();
             let scale = (6.0 / ((rows + cols) as f64)).sqrt();
@@ -261,7 +230,7 @@ impl Layer {
 
 #[test]
 fn test_forward_pass() {
-    use rand::{rngs::StdRng, SeedableRng, Rng};
+    use rand::{rngs, SeedableRng, Rng};
     use ndarray::{Array1, Array2};
 
     let dataset_size = 10;
@@ -278,7 +247,7 @@ fn test_forward_pass() {
     network.run(&inputs);
     println!("outputs: {:?}", network.run(&inputs));
 
-    let mut rng = StdRng::seed_from_u64(123);
+    let mut rng = rngs::StdRng::seed_from_u64(123);
     let range: f64 = (6.0 / 3 as f64).sqrt();
     let initial_weights = Array1::from_shape_vec(4, (0..4).map(|_| rng.gen_range(-range..range)).collect::<Vec<f64>>()).unwrap();
     let initial_biases = Array1::from_shape_vec(3, vec![1.0, 1.0, 1.0]).unwrap();

@@ -7,3 +7,6 @@ edition = "2021"
 rand = "0.8.5"
 ndarray = "0.15.6"
 plotlib = "0.5.1"
+csv = "1.2"
+rug = "1.10.0"
+serde = {version = "1.0", features = ["derive"]}
