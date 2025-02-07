@@ -1,89 +1,18 @@
 pub mod activation_functions;
+pub mod loss_functions;
 use activation_functions::ActivationFunction;
+
 
 extern crate rand;
 use core::f64;
-
-use ndarray::{Array1, Array2, Axis};
 use crate::dataset::Dataset;
+
 use rand::{rngs, Rng, SeedableRng};
+use ndarray::{Array1, Array2, Axis};
 
 
+use loss_functions::LossFunction;
 
-
-pub enum LossFunction {
-    MeanSquaredError,
-    CrossEntropy,
-}
-
-impl LossFunction {
-    pub fn calculate_loss(&self, labels: &Array2<f64>, outputs: &Array2<f64>) -> f64 {
-        match self {
-            LossFunction::MeanSquaredError => {
-                let diff = outputs - labels;
-                let squared_diff = diff.mapv(|x| x.powi(2));
-                let mse = squared_diff.sum() / squared_diff.len() as f64;
-                mse
-            }
-
-            LossFunction::CrossEntropy => {
-                //Guide for stable cross entropy: https://jaykmody.com/blog/stable-softmax/
-                let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
-                let divisors = outputs.map_axis(Axis(0), |x| x.mapv(|x| (x - c).exp()).sum());
-                let log_softmax = outputs - c - divisors.mapv(|x| x.ln());
-                let loss = (labels * log_softmax).sum();
-                -loss / labels.dim().0 as f64
-            }
-        }
-    }
-    
-    fn derivative(&self, labels: &Array2<f64>, outputs: &Array2<f64>) -> Array2<f64> {
-        match self {
-            LossFunction::MeanSquaredError => outputs - labels,
-            LossFunction::CrossEntropy => {
-                //Guide for stable cross entropy: https://jaykmody.com/blog/stable-softmax/
-                let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
-                let divisors = outputs.map_axis(Axis(0), |x| x.mapv(|x| (x - c).exp()).sum());
-                let probabilities = (outputs - c).mapv(|x| x.exp()) / divisors;
-                probabilities - labels
-            }
-        }
-    }
-}
-
-#[test]
-fn test_cross_entropy() {
-
-    fn test_three_classes(labels: Array2<f64>, outputs: Array2<f64>) -> () {
-        let c = outputs.iter().fold(f64::NEG_INFINITY, |a, x| if x > &a { *x } else { a });
-        let divisor = outputs.mapv(|x: f64| (x - c).exp()).sum();
-
-        let true_loss = -(
-            (labels[[0, 0]] * (outputs[[0, 0]] - c - divisor.ln()) + 
-            labels[[1, 0]] * (outputs[[1, 0]] - c - divisor.ln()) + 
-            labels[[2, 0]] * (outputs[[2, 0]] - c - divisor.ln())) / 3.0);
-
-        
-            let loss = LossFunction::CrossEntropy.calculate_loss(&labels, &outputs);
-            println!("labels: {:?}", &labels);
-            println!("outputs: {:?}", &outputs);
-            println!("true loss: {}", true_loss);
-            println!("loss: {}", loss);
-            assert!((true_loss - loss).abs() < 1e-15);
-            assert!(loss.is_finite());
-            assert!(!loss.is_nan());
-            assert!(loss.is_sign_positive());
-    }
-
-    for i in 0..4000 {
-        let max_val = 1000000.0;
-        rngs::StdRng::seed_from_u64(i);
-        let labels = Array2::from_shape_vec((3, 1), (0..3).map(|_| rand::random::<f64>() * max_val).collect()).unwrap();
-        let outputs = Array2::from_shape_vec((3, 1), (0..3).map(|_| rand::random::<f64>() * max_val).collect() ).unwrap();
-        test_three_classes(labels, outputs);
-    }
-    
-}
 
 pub struct Network {
     layers: Vec<Layer>,
@@ -252,7 +181,6 @@ fn test_forward_pass() {
     let initial_weights = Array1::from_shape_vec(4, (0..4).map(|_| rng.gen_range(-range..range)).collect::<Vec<f64>>()).unwrap();
     let initial_biases = Array1::from_shape_vec(3, vec![1.0, 1.0, 1.0]).unwrap();
     
-    //perform gradient descent manually for one step for model specifed above:
     let h1 = |x : f64| (initial_weights[0] * x + initial_biases[0]).tanh();
     let h2 = |x : f64| (initial_weights[1] * x + initial_biases[1]).tanh();
     let o = |x : f64| initial_weights[2] * h1(x) + initial_weights[3] * h2(x) + initial_biases[2];

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::error::Error;
 use std::fs::File;
 use std::path::Path;
@@ -54,12 +55,18 @@ pub fn plot(path: &str, fns: Vec<Vec<(f64, f64)>>, x_min: f64, x_max: f64, y_min
     use plotlib::style::{LineStyle, LineJoin};
     use plotlib::view::ContinuousView;
 
+    let colors = vec![
+        "red", "blue", "green", "orange", "purple", 
+        "cyan", "magenta", "yellow", "brown", "black"
+    ];
+
     let mut plots = Vec::new();
 
-    for fcn in fns.into_iter() {
+    for (i, fcn) in fns.into_iter().enumerate() {
+        let color = colors[i % colors.len()];
         let s: Plot = Plot::new(fcn).line_style(
             LineStyle::new()
-                .colour("burlywood")
+                .colour(color)
                 .linejoin(LineJoin::Round),
         );
         plots.push(s);

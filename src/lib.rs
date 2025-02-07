@@ -40,7 +40,7 @@ mod fit_tests {
     fn test_one_training_step() {
         use rand::{rngs::StdRng, SeedableRng, Rng};
         use ndarray::{Array1, Array2};
-        use network::{Network, Layer, activation_functions::ActivationFunction, LossFunction};
+        use network::{Network, Layer, activation_functions::ActivationFunction, loss_functions::LossFunction};
         use dataset::Dataset;
 
         let learning_rate: f64 = 1.0;
@@ -124,22 +124,17 @@ mod fit_tests {
    #[test]
     fn fit_one_dimensional_function() {
         use ndarray::Array2;
-        
-        use plotlib::page::Page;
-        use plotlib::repr::Plot;
-        use plotlib::style::{LineStyle, LineJoin};
-        use plotlib::view::ContinuousView;
-
-        use network::{Network, Layer, activation_functions::ActivationFunction, LossFunction};
+        use network::{Network, Layer, activation_functions::ActivationFunction, loss_functions::LossFunction};
         use dataset::Dataset;
 
         const DATASET_SIZE: usize = 500;
-        const STEP_SIZE: f64 = 0.1;
+        const STEP_SIZE: f64 = 0.01;
         
         let learning_rate: f64 = 0.01;
         let decay_rate: f64 = 0.001;
         let batch_size = 1;
         let epochs = 5000;
+        
         println!("epochs: {}", epochs);
         
         //Initialize network
@@ -168,18 +163,7 @@ mod fit_tests {
         let true_data = (0..DATASET_SIZE).map(|x| (x as f64) * STEP_SIZE).map(|x| (x, f(&x))).collect();
         let predictions = inputs.iter().zip(outputs.iter()).map(|(&input, &output)| (input, output)).collect();
         
-        let s1: Plot = Plot::new(true_data).line_style(
-            LineStyle::new()
-                .colour("burlywood")
-                .linejoin(LineJoin::Round),
-        );
-        let s2: Plot = Plot::new(predictions).line_style(
-            LineStyle::new()
-                .colour("darkolivegreen")
-                .linejoin(LineJoin::Round),
-        );
-        let view = ContinuousView::new().add(s1).add(s2);
-        Page::single(&view).save("before_training.svg").expect("saving svg");
+        test_utils::plot("before_training.svg", vec![true_data, predictions], 0.0, DATASET_SIZE as f64 * STEP_SIZE, -1.0, 2.0);
 
         let mut dataset = Dataset::new(
             inputs.clone(), 
@@ -188,6 +172,7 @@ mod fit_tests {
         );
         let (maxs, mins) = dataset.normalize_inputs();
         let (inputs, _) = dataset.get_all();
+
         //train network
         network.fit(dataset, epochs, learning_rate, decay_rate);
         
@@ -201,18 +186,8 @@ mod fit_tests {
         let true_data = (0..DATASET_SIZE).map(|x| (x as f64) * STEP_SIZE).map(|x| (x, f(&x))).collect();
         let predictions = ((inputs * (maxs - &mins)) + mins).iter().zip(outputs.iter()).map(|(&input, &output)| (input, output)).collect();
 
-        let s1: Plot = Plot::new(true_data).line_style(
-            LineStyle::new()
-                .colour("burlywood")
-                .linejoin(LineJoin::Round),
-        );
-        let s2: Plot = Plot::new(predictions).line_style(
-            LineStyle::new()
-                .colour("darkolivegreen")
-                .linejoin(LineJoin::Round),
-        );
-        let view = ContinuousView::new().add(s1).add(s2);
-        Page::single(&view).save("after_training.svg").expect("saving svg");
+        test_utils::plot("after_training.svg", vec![true_data, predictions], 0.0, DATASET_SIZE as f64 * STEP_SIZE, -1.0, 1.0);
+
         assert!(LossFunction::MeanSquaredError.calculate_loss(&labels, &outputs) < 1e-4);
     }
 }
